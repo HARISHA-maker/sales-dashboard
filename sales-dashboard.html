@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sales & Revenue Dashboard</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b2330;--mute:#667085;--bd:#e3e6eb;--a:#2563eb;--g:#16a34a;--r:#dc2626;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141b;--card:#18202b;--tx:#e8ecf2;--mute:#97a3b4;--bd:#2a3442;--a:#60a5fa;--g:#4ade80;--r:#f87171}}
+:root[data-theme="dark"]{--bg:#0f141b;--card:#18202b;--tx:#e8ecf2;--mute:#97a3b4;--bd:#2a3442;--a:#60a5fa;--g:#4ade80;--r:#f87171}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.w{max-width:1150px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0}.sub{color:var(--mute);font-size:13px}
+.top{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin-bottom:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:12px}
+select,button,.btn{background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:7px 10px;font:inherit;cursor:pointer}
+button.p,.btn.p{background:var(--a);color:#fff;border-color:var(--a)}
+label.l{color:var(--mute);font-size:12px}
+.k{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:12px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px}
+.k .v{font-size:24px;font-weight:650;margin-top:2px}.k .t{color:var(--mute);font-size:12px}
+.up{color:var(--g)}.dn{color:var(--r)}
+.g{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:800px){.g,.g2{grid-template-columns:1fr}}
+.c h2{font-size:14px;margin:0 0 8px}.ch{position:relative;height:260px}
+.sc{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mute);font-weight:500;font-size:12px}td.n,th.n{text-align:right}
+ul{margin:0;padding-left:18px}li{margin:4px 0}
+.tag{display:inline-block;background:var(--bg);border:1px solid var(--bd);border-radius:99px;padding:2px 10px;font-size:12px;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="w">
+<div class="top"><div><h1>Sales & Revenue Dashboard</h1><div class="sub" id="src">Sample data loaded</div></div>
+<div><label class="btn p">Import Excel / CSV<input id="f" type="file" accept=".csv,.xlsx,.xls" hidden></label> <button id="smp">Use sample data</button></div></div>
+
+<div class="bar">
+<label class="l">Year</label><select id="fy"></select>
+<label class="l">Region</label><select id="fr"></select>
+<label class="l">Category</label><select id="fc"></select>
+<span id="pf"></span><button id="rs">Reset filters</button>
+</div>
+
+<div class="k" id="kp"></div>
+
+<div class="g"><div class="c"><h2>Revenue trend (monthly)</h2><div class="ch"><canvas id="c1"></canvas></div></div>
+<div class="c"><h2>Revenue by region</h2><div class="ch"><canvas id="c2"></canvas></div></div></div>
+
+<div class="g2"><div class="c"><h2>Top products <span class="sub">(click a bar to filter)</span></h2><div class="ch"><canvas id="c3"></canvas></div></div>
+<div class="c"><h2>Key insights</h2><ul id="ins"></ul>
+<h2 style="margin-top:14px">Import format</h2><div class="sub">Columns (any order): Date, Region, Category, Product, Units, Revenue. Database users: export a query to CSV and import it here.</div></div></div>
+
+<div class="c sc"><h2>Product performance</h2><table><thead><tr><th>Product</th><th>Category</th><th class="n">Units</th><th class="n">Revenue</th><th class="n">Share</th></tr></thead><tbody id="tb"></tbody></table></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const fmt=n=>'₹'+(n>=1e7?(n/1e7).toFixed(2)+' Cr':n>=1e5?(n/1e5).toFixed(2)+' L':Math.round(n).toLocaleString('en-IN'));
+const num=n=>Math.round(n).toLocaleString('en-IN');
+let DATA=[],prod='',charts={};
+
+function sample(){
+  let s=7;const rnd=()=>(s=(s*16807)%2147483647)/2147483647;
+  const P=[['Laptop Pro','Electronics',68000],['Smartphone X','Electronics',42000],['Headphones','Electronics',6500],['Office Chair','Furniture',9500],['Standing Desk','Furniture',21000],['Bookshelf','Furniture',7800],['Running Shoes','Apparel',4200],['Rain Jacket','Apparel',3600],['Yoga Mat','Apparel',1400],['Smart Watch','Electronics',15000]];
+  const R=['North','South','East','West'],out=[];
+  for(let y=2025;y<=2026;y++)for(let m=1;m<=(y==2026?11:12);m++)for(const[p,c,pr]of P)for(const r of R){
+    const season=1+0.25*Math.sin((m-3)/12*6.28)+(m>=10?0.3:0)+(y-2025)*0.12;
+    const u=Math.max(1,Math.round((4+rnd()*10)*season*(r=='South'?1.3:r=='West'?1.1:1)*(pr>20000?0.5:1)));
+    out.push({m:y+'-'+String(m).padStart(2,'0'),region:r,cat:c,prod:p,units:u,rev:u*pr*(0.92+rnd()*0.1)});
+  }return out;
+}
+
+function load(rows,label){DATA=rows;prod='';$('src').textContent=label+' · '+num(rows.length)+' rows';
+  const opt=(id,arr,all)=>{$(id).innerHTML='<option value="">'+all+'</option>'+arr.map(v=>'<option>'+v+'</option>').join('')};
+  const u=k=>[...new Set(DATA.map(d=>k(d)))].sort();
+  opt('fy',u(d=>d.m.slice(0,4)),'All years');opt('fr',u(d=>d.region),'All regions');opt('fc',u(d=>d.cat),'All categories');render();}
+
+function render(){
+  const y=$('fy').value,r=$('fr').value,c=$('fc').value;
+  const rows=DATA.filter(d=>(!y||d.m.startsWith(y))&&(!r||d.region==r)&&(!c||d.cat==c));
+  const view=rows.filter(d=>!prod||d.prod==prod);
+  $('pf').innerHTML=prod?'<span class="tag">Product: '+prod+'</span>':'';
+  const sum=(a,k)=>a.reduce((t,d)=>t+d[k],0),grp=(a,k)=>{const o={};a.forEach(d=>{const x=o[d[k]]||(o[d[k]]={rev:0,units:0,cat:d.cat});x.rev+=d.rev;x.units+=d.units});return o};
+  const rev=sum(view,'rev'),units=sum(view,'units');
+  const mo=grp(view,'m'),ms=Object.keys(mo).sort();
+  const last=ms.length?mo[ms[ms.length-1]].rev:0,prev=ms.length>1?mo[ms[ms.length-2]].rev:0;
+  const mom=prev?(last-prev)/prev*100:0;
+  const best=ms.reduce((b,k)=>!b||mo[k].rev>mo[b].rev?k:b,'');
+  $('kp').innerHTML=[['Total revenue',fmt(rev),''],['Units sold',num(units),''],['Avg. price / unit',fmt(units?rev/units:0),''],
+    ['Latest month vs previous',(mom>=0?'▲ ':'▼ ')+Math.abs(mom).toFixed(1)+'%',ms.length?ms[ms.length-1]:'—']]
+    .map((k,i)=>'<div class="c"><div class="t">'+k[0]+'</div><div class="v '+(i==3?(mom>=0?'up':'dn'):'')+'">'+k[1]+'</div><div class="t">'+k[2]+'&nbsp;</div></div>').join('');
+  const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const tc=css('--mute'),gc=css('--bd');
+  const pal=['#2563eb','#16a34a','#f59e0b','#dc2626','#8b5cf6','#0891b2','#db2777','#65a30d'];
+  const mk=(id,cfg)=>{if(charts[id])charts[id].destroy();Chart.defaults.color=tc;charts[id]=new Chart($(id),cfg)};
+  const sc={x:{grid:{color:gc}},y:{grid:{color:gc},ticks:{callback:v=>fmt(v)}}};
+  const base={responsive:true,maintainAspectRatio:false};
+  mk('c1',{type:'line',data:{labels:ms,datasets:[{label:'Revenue',data:ms.map(k=>mo[k].rev),borderColor:pal[0],backgroundColor:pal[0]+'33',fill:true,tension:.3,pointRadius:2}]},options:{...base,plugins:{legend:{display:false}},scales:sc}});
+  const rg=grp(view,'region'),rk=Object.keys(rg);
+  mk('c2',{type:'doughnut',data:{labels:rk,datasets:[{data:rk.map(k=>rg[k].rev),backgroundColor:pal,borderColor:css('--card')}]},options:{...base,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:t=>t.label+': '+fmt(t.raw)}}}}});
+  const pg=grp(rows,'prod'),pk=Object.keys(pg).sort((a,b)=>pg[b].rev-pg[a].rev),top=pk.slice(0,8);
+  mk('c3',{type:'bar',data:{labels:top,datasets:[{data:top.map(k=>pg[k].rev),backgroundColor:top.map(k=>k==prod?pal[2]:pal[0])}]},
+    options:{...base,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:t=>fmt(t.raw)}}},scales:{x:{grid:{color:gc},ticks:{callback:v=>fmt(v)}},y:{grid:{display:false}}},
+    onClick:(e,el)=>{if(el.length){const p=top[el[0].index];prod=prod==p?'':p;render()}}}});
+  const tot=sum(rows,'rev')||1;
+  $('tb').innerHTML=pk.map(k=>'<tr><td>'+k+'</td><td>'+pg[k].cat+'</td><td class="n">'+num(pg[k].units)+'</td><td class="n">'+fmt(pg[k].rev)+'</td><td class="n">'+(pg[k].rev/tot*100).toFixed(1)+'%</td></tr>').join('');
+  const bestR=rk.sort((a,b)=>rg[b].rev-rg[a].rev)[0],cg=grp(rows,'cat'),bestC=Object.keys(cg).sort((a,b)=>cg[b].rev-cg[a].rev)[0];
+  const I=[];
+  if(pk.length)I.push('<b>'+pk[0]+'</b> is the top product with '+(pg[pk[0]].rev/tot*100).toFixed(1)+'% of revenue.');
+  if(pk.length>3)I.push('The top 3 products drive '+(pk.slice(0,3).reduce((t,k)=>t+pg[k].rev,0)/tot*100).toFixed(0)+'% of revenue.');
+  if(bestR)I.push('<b>'+bestR+'</b> is the strongest region ('+fmt(rg[bestR].rev)+').');
+  if(bestC)I.push('<b>'+bestC+'</b> is the leading category.');
+  if(best)I.push('Peak month: <b>'+best+'</b> at '+fmt(mo[best].rev)+'.');
+  $('ins').innerHTML=I.map(t=>'<li>'+t+'</li>').join('')||'<li>No data for these filters.</li>';
+}
+
+['fy','fr','fc'].forEach(i=>$(i).onchange=render);
+$('rs').onclick=()=>{['fy','fr','fc'].forEach(i=>$(i).value='');prod='';render()};
+$('smp').onclick=()=>load(sample(),'Sample data');
+
+const find=(h,keys)=>h.find(x=>keys.some(k=>x.toLowerCase().includes(k)));
+$('f').onchange=e=>{
+  const file=e.target.files[0];if(!file)return;
+  const rd=new FileReader();
+  rd.onload=ev=>{try{
+    const wb=XLSX.read(ev.target.result,{type:'array',cellDates:true});
+    const js=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    if(!js.length)throw new Error('empty');
+    const h=Object.keys(js[0]),k={d:find(h,['date','month']),r:find(h,['region']),c:find(h,['categ']),p:find(h,['product','item']),u:find(h,['unit','qty','quantity']),v:find(h,['revenue','sales','amount','total'])};
+    if(!k.d||!k.v)throw new Error('Need at least Date and Revenue columns');
+    const rows=js.map(o=>{let d=o[k.d];d=d instanceof Date?d:new Date(d);if(isNaN(d))return null;
+      return{m:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),region:String(o[k.r]||'All'),cat:String(o[k.c]||'General'),prod:String(o[k.p]||'Item'),units:+o[k.u]||1,rev:+String(o[k.v]).replace(/[^0-9.-]/g,'')||0}}).filter(Boolean);
+    if(!rows.length)throw new Error('No valid dates found');
+    load(rows,file.name);
+  }catch(err){alert('Could not read file: '+err.message)}};
+  rd.readAsArrayBuffer(file);e.target.value='';
+};
+load(sample(),'Sample data');
+</script>
+</body>
+</html>
